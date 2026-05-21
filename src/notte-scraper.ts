@@ -13,6 +13,9 @@ const SKIP_SOURCE_IDS = [
   '302710165', // ROTH Conference participation - different page format
 ]
 
+// Maximum articles to import per run
+const MAX_IMPORTS = 3
+
 // Initialize Sanity client
 const sanityClient = createClient({
   projectId: process.env.SANITY_PROJECT_ID || 'edocyjic',
@@ -402,12 +405,6 @@ export async function importWithNotte(): Promise<{
           console.log(`Title: ${title}`)
           console.log(`Body length: ${body.length} chars`)
           
-          if (body.length < 200) {
-            console.log(`Skipping - insufficient content (${body.length} chars)`)
-            results.skipped++
-            continue
-          }
-
           // Create Sanity document
           const docId = await createPressRelease({
             title,
@@ -420,6 +417,12 @@ export async function importWithNotte(): Promise<{
 
         } finally {
           await closeSession(session)
+        }
+
+        // Stop after max imports
+        if (results.imported >= MAX_IMPORTS) {
+          console.log(`\nReached max imports (${MAX_IMPORTS}), stopping.`)
+          break
         }
 
         // Rate limiting
