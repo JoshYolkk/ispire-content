@@ -252,7 +252,6 @@ function extractArticleContent(markdown: string, articleUrl: string): {
   
   return {
     title: title || 'Untitled Press Release',
-    shortDescription: shortDescription || 'Press release from Ispire Technology Inc.',
     body: body.substring(0, 100000)
   }
 }
@@ -263,7 +262,6 @@ function extractArticleContent(markdown: string, articleUrl: string): {
 async function createPressRelease(article: {
   title: string
   url: string
-  shortDescription: string
   body: string
   date?: string
 }): Promise<string> {
@@ -274,7 +272,6 @@ async function createPressRelease(article: {
     _type: 'pressRelease',
     title: article.title,
     slug: { _type: 'slug', current: generateSlug(article.title) },
-    shortDescription: article.shortDescription,
     bodyText: article.body,
     date: article.date ? new Date(article.date).toISOString() : new Date().toISOString(),
     sourceUrl: article.url,
@@ -400,10 +397,9 @@ export async function importWithNotte(): Promise<{
           }
           
           // Extract clean content
-          const { title, shortDescription, body } = extractArticleContent(articleMarkdown, article.url)
+          const { title, body } = extractArticleContent(articleMarkdown, article.url)
           
           console.log(`Title: ${title}`)
-          console.log(`Short desc: ${shortDescription.substring(0, 80)}...`)
           console.log(`Body length: ${body.length} chars`)
           
           if (body.length < 200) {
@@ -416,7 +412,6 @@ export async function importWithNotte(): Promise<{
           const docId = await createPressRelease({
             title,
             url: article.url,
-            shortDescription,
             body,
           })
 

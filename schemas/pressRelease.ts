@@ -24,18 +24,11 @@ export const pressRelease = defineType({
     }),
     
     defineField({
-      name: 'shortDescription',
-      title: 'Short Description',
-      type: 'text',
-      rows: 3,
-    }),
-    
-    defineField({
       name: 'bodyText',
       title: 'Body Text',
       type: 'text',
-      rows: 20,
-      description: 'HTML content from press release. Synced to Webflow RichText.',
+      rows: 25,
+      description: 'Full article content from press release.',
     }),
     
     defineField({
