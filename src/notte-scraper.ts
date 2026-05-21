@@ -28,68 +28,33 @@ function generateSlug(title: string): string {
 }
 
 /**
- * Extract PR Newswire article ID from URL
+ * Extract source ID from URL (the numeric ID in PRNewswire URLs)
  */
-function extractSourceId(url: string): string | undefined {
-  const match = url.match(/-(\d+)\.html/)
-  return match ? match[1] : undefined
+function extractSourceId(url: string): string {
+  const match = url.match(/-(\d+)\.html$/)
+  return match ? match[1] : ''
 }
 
 /**
- * Check if article already exists by GUID
+ * Check if article already exists in Sanity
  */
-async function existsByGuid(sourceGuid: string): Promise<boolean> {
+async function existsByGuid(url: string): Promise<boolean> {
   const result = await sanityClient.fetch(
-    `count(*[_type == "pressRelease" && sourceGuid == $sourceGuid])`,
-    { sourceGuid }
+    `count(*[_type == "pressRelease" && sourceGuid == $url])`,
+    { url }
   )
   return result > 0
 }
 
 /**
- * Create a press release document in Sanity
+ * Clean title by removing date prefixes
  */
-async function createPressRelease(article: {
-  title: string
-  url: string
-  body: string
-  date?: string
-}): Promise<string> {
-  const sourceGuid = article.url
-  const sourceId = extractSourceId(article.url)
-
-  const doc = {
-    _type: 'pressRelease',
-    title: article.title,
-    slug: { _type: 'slug', current: generateSlug(article.title) },
-    shortDescription: article.body.substring(0, 500).replace(/<[^>]*>/g, '').trim(),
-    bodyText: article.body,
-    date: article.date ? new Date(article.date).toISOString() : new Date().toISOString(),
-    sourceUrl: article.url,
-    sourceGuid: sourceGuid,
-    sourceId: sourceId,
-    sourceName: 'PR Newswire',
-    newsProvidedBy: 'Ispire Technology Inc.',
-    importedAt: new Date().toISOString(),
-    syncStatus: 'imported',
-  }
-
-  const result = await sanityClient.create(doc)
-  return result._id
-}
-
-/**
- * Extract clean article title, removing date prefixes
- */
-function cleanTitle(title: string, url: string): string {
-  // Remove date prefix like "### May 12, 2026, 08:30 ET" or "May 12, 2026, 08:30 ET"
-  let cleaned = title
+function cleanTitle(rawTitle: string, url: string): string {
+  let cleaned = rawTitle
     .replace(/^#+\s*/, '') // Remove heading markers
     .replace(/^\w+\s+\d{1,2},?\s+\d{4},?\s+\d{1,2}:\d{2}\s*(ET|PT|GMT)?\s*/i, '') // Remove date
-    .replace(/^\d{1,2}:\d{2}\s*(ET|PT|GMT)?\s*/i, '') // Remove time-only
     .trim()
   
-  // If still empty or too short, try to extract from URL
   if (cleaned.length < 10) {
     const titleMatch = url.match(/\/news-releases\/([^/]+)-\d+\.html/)
     if (titleMatch) {
@@ -103,15 +68,13 @@ function cleanTitle(title: string, url: string): string {
 }
 
 /**
- * Extract article links from the company news page
- * Handles both full URLs and relative URLs
+ * Extract article links from company news page
  */
 function extractArticleLinks(content: string): Array<{ title: string; url: string }> {
   const articles: Array<{ title: string; url: string }> = []
   const seen = new Set<string>()
   const baseUrl = 'https://www.prnewswire.com'
   
-  // Pattern 1: Markdown links [Title](URL) - handles both full and relative URLs
   const linkPattern = /\[([^\]]+)\]\(((https?:\/\/www\.prnewswire\.com)?\/[^)]+)\)/g
   let match
   
@@ -119,21 +82,16 @@ function extractArticleLinks(content: string): Array<{ title: string; url: strin
     const rawTitle = match[1].trim()
     let url = match[2].split('"')[0].split(' ')[0].trim()
     
-    // Convert relative URLs to full URLs
     if (url.startsWith('/')) {
       url = baseUrl + url
     }
     
-    // Keep only English (/news-releases/) URLs, skip /apac/, /zh/, /jp/
     if (!url.includes('/news-releases/')) continue
     if (url.includes('/apac/') || url.includes('/zh/') || url.includes('/jp/')) continue
-    
-    // Skip non-article links
     if (url.includes('/account/') || url.includes('/login') || 
         url.includes('/rss/') || url.includes('/contact') || 
         url.includes('/resources/')) continue
     
-    // Extract article ID to validate it's a real article
     const idMatch = url.match(/-(\d+)\.html/)
     if (idMatch && !seen.has(url)) {
       seen.add(url)
@@ -146,101 +104,128 @@ function extractArticleLinks(content: string): Array<{ title: string; url: strin
 }
 
 /**
- * Extract clean article content from page
+ * Extract article content from page markdown
+ * PRNewswire structure:
+ * - Navigation menus (skip)
+ * - Title (first major heading)
+ * - Language links
+ * - "News provided by" section
+ * - Date line (May 12, 2026, 08:30 ET)
+ * - "Share this article" links (javascript:; lines)
+ * - Short description (italic promo paragraph) <-- THIS
+ * - Dateline (LOS ANGELES, May 12, 2026 /PRNewswire/ --)
+ * - Body content
+ * - IR Contact / PR Contact / SOURCE line
+ * - Footer (skip)
  */
-function extractArticleContent(markdown: string, articleUrl: string): { title: string; body: string } {
-  const lines = markdown.split('\n').filter(l => l.trim())
+function extractArticleContent(markdown: string, articleUrl: string): { 
+  title: string
+  shortDescription: string
+  body: string 
+} {
+  const lines = markdown.split('\n')
   
-  // Find the article title (usually the first heading or first significant line)
+  // Find the article title (first substantial line that looks like a headline)
   let title = ''
-  let bodyLines: string[] = []
-  let inBody = false
-  let foundTitle = false
-  
-  // Common patterns to skip
-  const skipPatterns = [
-    'Skip Navigation', 'Client Login', 'Accessibility', 'PR Newswire',
-    'Send a Release', 'Resources', 'Journalists', 'RSS',
-    'News in Focus', 'Business & Money', 'Science & Tech', 'Lifestyle & Health',
-    'Policy & Public Interest', 'People & Culture', 'Explore',
-    'Contact', 'Products', 'About', 'All News',
-    'SOURCE Ispire', '©', 'Copyright', 'Cision'
-  ]
+  let titleIndex = -1
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
-    const lowerLine = line.toLowerCase()
+    // Skip navigation links
+    if (line.startsWith('[') || line.startsWith('#nav') || line.includes('javascript:;')) continue
+    if (line.length < 20 || line.length > 300) continue
+    if (line.includes('|') || line.includes('Accessibility') || line.includes('Skip Navigation')) continue
     
-    // Skip empty lines
-    if (line.length < 5) continue
-    
-    // Skip lines with skip patterns
-    if (skipPatterns.some(p => lowerLine.includes(p.toLowerCase()))) {
-      continue
-    }
-    
-    // Skip markdown navigation
-    if (line.startsWith('[') && line.includes('](http')) {
-      continue
-    }
-    
-    // Look for title (first significant line without these patterns)
-    if (!foundTitle) {
-      // Title is usually a heading or first substantial text
-      const cleanLine = line.replace(/^#+\s*/, '').trim()
-      
-      if (cleanLine.length > 10 && cleanLine.length < 200) {
-        // Check if it looks like a title (not a navigational sentence)
-        if (!cleanLine.includes('|') && 
-            !cleanLine.startsWith('*') &&
-            !cleanLine.includes('News provided by')) {
-          title = cleanLine
-          foundTitle = true
-          continue
-        }
-      }
-    }
-    
-    // After title, collect body content
-    if (foundTitle && !inBody) {
-      // Skip until we find the first paragraph marker or substantial text
-      if (line.length > 50 || line.startsWith('#')) {
-        inBody = true
-      }
-    }
-    
-    if (inBody) {
-      // Stop at contact info or footer
-      if (lowerLine.includes('ir contact:') || 
-          lowerLine.includes('pr contact:') ||
-          lowerLine.includes('source ispire') ||
-          lowerLine.includes('### modal') ||
-          lowerLine.includes('also from this source') ||
-          lowerLine.includes('request a demo')) {
-        break
-      }
-      
-      // Collect body text
-      const cleanLine = line.replace(/^#+\s*/, '').trim()
-      if (cleanLine.length > 10) {
-        bodyLines.push(cleanLine)
-      }
+    const cleaned = line.replace(/^#+\s*/, '').trim()
+    if (cleaned.length > 20 && cleaned.length < 300 && !cleaned.startsWith('[')) {
+      title = cleaned
+      titleIndex = i
+      break
     }
   }
   
-  // If no body found, use everything after title
-  if (bodyLines.length === 0 && title) {
-    const titleIndex = lines.findIndex(l => l.includes(title.split(' ')[0]))
-    bodyLines = lines.slice(titleIndex + 1)
-      .map(l => l.trim())
-      .filter(l => l.length > 20)
-      .filter(l => !skipPatterns.some(p => l.toLowerCase().includes(p.toLowerCase())))
-      .slice(0,20)
+  // Find the dateline pattern (LOS ANGELES, May 12, 2026 /PRNewswire/ --)
+  // This marks the START of the body content
+  let datelineIndex = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (/[A-Z][A-Z\s]+,\s*\w+\s+\d{1,2},?\s*\d{4}\s*\/PRNewswire\//.test(lines[i])) {
+      datelineIndex = i
+      break
+    }
+  }
+  
+  // Find the date line pattern (May 12, 2026, 08:30 ET)
+  // The short description appears AFTER this line and AFTER "Share this article"
+  let dateLineIndex = -1
+  for (let i = titleIndex; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (/\w+\s+\d{1,2},?\s+\d{4},?\s+\d{1,2}:\d{2}\s*(ET|PT|GMT)/.test(line)) {
+      dateLineIndex = i
+      break
+    }
+  }
+  
+  // Extract short description:
+  // Look for italic text (*...*) AFTER Share this article / javascript:; lines
+  // and BEFORE the dateline (city, date /PRNewswire/)
+  let shortDescription = ''
+  
+  // Find Share this article section
+  const shareIdx = lines.findIndex(l => l.includes('Share this article'))
+  const dateLineIdx = lines.findIndex((l, i) => i > (shareIdx >= 0 ? shareIdx : 0) && /\w+\s+\d{1,2},?\s+\d{4},?\s+\d{1,2}:\d{2}\s*(ET|PT|GMT)/.test(l))
+  
+  // Look for italic text (*...*) after share section, before dateline
+  for (let i = (shareIdx >= 0 ? shareIdx : titleIndex) + 1; i < (datelineIndex > 0 ? datelineIndex : lines.length); i++) {
+    const line = lines[i].trim()
+    
+    // Check for italic text pattern: *text...*
+    const italicMatch = line.match(/^\*(.+)\*$/)
+    if (italicMatch && italicMatch[1].length > 30) {
+      shortDescription = italicMatch[1]
+      break
+    }
+    
+    // Also check for multi-line italic (starts with *, continues on next lines)
+    if (line.startsWith('*') && !line.endsWith('*') && line.length > 10) {
+      // Collect full italic text across lines
+      let italicText = line.substring(1) // remove leading *
+      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+        if (lines[j].endsWith('*')) {
+          italicText += ' ' + lines[j].replace(/\*$/g, '').trim()
+          break
+        }
+        italicText += ' ' + lines[j].trim()
+      }
+      shortDescription = italicText.trim()
+      break
+    }
+  }
+  
+  // Extract body content (from dateline to contact/footer)
+  let bodyLines: string[] = []
+  if (datelineIndex >= 0) {
+    for (let i = datelineIndex; i < lines.length; i++) {
+      const line = lines[i].trim()
+      
+      // Stop at contact info or footer markers
+      if (line.match(/^IR Contact:/i) || line.match(/^PR Contact:/i)) break
+      if (line === 'SOURCE Ispire Technology Inc.' || line === 'SOURCE Ispire') break
+      if (line.includes('### Modal') || line.includes('Also from this source')) break
+      if (line.includes('Request a Demo') || line.includes('more press release views')) break
+      
+      // Skip empty lines and navigation
+      if (line.length < 5) continue
+      if (line.startsWith('[') && line.includes('](http')) continue
+      if (line === 'javascript:;') continue
+      
+      bodyLines.push(line)
+      if (bodyLines.length > 500) break
+    }
   }
   
   const body = bodyLines.join('\n\n')
   
-  // Extract title from URL if we couldn't find it
+  // Fallback for title
   if (!title) {
     const titleMatch = articleUrl.match(/\/news-releases\/([^/]+)-\d+\.html/)
     if (titleMatch) {
@@ -250,7 +235,53 @@ function extractArticleContent(markdown: string, articleUrl: string): { title: s
     }
   }
   
-  return { title: title || 'Untitled', body }
+  // Fallback for short description
+  if (!shortDescription && body) {
+    // Try to extract first paragraph from body
+    const firstPara = body.split('\n\n')[0]
+    if (firstPara && firstPara.length > 50) {
+      shortDescription = firstPara.substring(0, 300) + '...'
+    }
+  }
+  
+  return {
+    title: title || 'Untitled Press Release',
+    shortDescription: shortDescription || 'Press release from Ispire Technology Inc.',
+    body: body.substring(0, 100000)
+  }
+}
+
+/**
+ * Create a press release document in Sanity
+ */
+async function createPressRelease(article: {
+  title: string
+  url: string
+  shortDescription: string
+  body: string
+  date?: string
+}): Promise<string> {
+  const sourceGuid = article.url
+  const sourceId = extractSourceId(article.url)
+
+  const doc = {
+    _type: 'pressRelease',
+    title: article.title,
+    slug: { _type: 'slug', current: generateSlug(article.title) },
+    shortDescription: article.shortDescription,
+    bodyText: article.body,
+    date: article.date ? new Date(article.date).toISOString() : new Date().toISOString(),
+    sourceUrl: article.url,
+    sourceGuid: sourceGuid,
+    sourceId: sourceId,
+    sourceName: 'PR Newswire',
+    newsProvidedBy: 'Ispire Technology Inc.',
+    importedAt: new Date().toISOString(),
+    syncStatus: 'imported',
+  }
+
+  const result = await sanityClient.create(doc)
+  return result._id
 }
 
 /**
@@ -294,13 +325,10 @@ export async function importWithNotte(): Promise<{
     session = client.Session()
     await session.start()
     
-    // Navigate to the company news page
     await session.execute({ type: 'goto', url: NEWS_SOURCE_URL })
     
-    // Scrape the page to get all article links
     const response = await session.scrape()
     
-    // Parse response
     let markdown = ''
     if (typeof response === 'string') {
       markdown = response
@@ -309,9 +337,7 @@ export async function importWithNotte(): Promise<{
     }
     
     console.log('Page content length:', markdown.length)
-    console.log('First 500 chars:', markdown.substring(0, 500))
     
-    // Extract article links
     const articles = extractArticleLinks(markdown)
     results.total = articles.length
 
@@ -327,10 +353,9 @@ export async function importWithNotte(): Promise<{
       console.log(`     ${a.url}`)
     })
 
-    // Close the list session
     await closeSession(session)
 
-    // Step 2: Import each article (limit to 20 per run to avoid timeouts)
+    // Step 2: Import each article (limit to 20 per run)
     for (const article of articles.slice(0, 20)) {
       try {
         // Check for duplicates
@@ -348,12 +373,7 @@ export async function importWithNotte(): Promise<{
         await session.start()
         
         try {
-          // Navigate to the article
           await session.execute({ type: 'goto', url: article.url })
-          
-          // Try to switch to English if needed (check for language dropdown)
-          // The English version URL is already in /news-releases/ (not /apac/zh/)
-          // So we should already be on English version
           
           const articleResponse = await session.scrape()
           
@@ -365,9 +385,10 @@ export async function importWithNotte(): Promise<{
           }
           
           // Extract clean content
-          const { title, body } = extractArticleContent(articleMarkdown, article.url)
+          const { title, shortDescription, body } = extractArticleContent(articleMarkdown, article.url)
           
           console.log(`Title: ${title}`)
+          console.log(`Short desc: ${shortDescription.substring(0, 80)}...`)
           console.log(`Body length: ${body.length} chars`)
           
           if (body.length < 200) {
@@ -380,6 +401,7 @@ export async function importWithNotte(): Promise<{
           const docId = await createPressRelease({
             title,
             url: article.url,
+            shortDescription,
             body,
           })
 
