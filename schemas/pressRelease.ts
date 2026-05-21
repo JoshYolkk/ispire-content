@@ -33,9 +33,9 @@ export const pressRelease = defineType({
     defineField({
       name: 'bodyText',
       title: 'Body Text',
-      type: 'array',
-      of: [{ type: 'block' }],
-      description: 'Stores imported press release body content. This may later contain HTML intended for Webflow rich text.',
+      type: 'text',
+      rows: 20,
+      description: 'HTML content from press release. Synced to Webflow RichText.',
     }),
     
     defineField({

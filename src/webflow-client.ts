@@ -23,6 +23,15 @@ function getHeaders(): HeadersInit {
   }
 }
 
+// Webflow sync-status option IDs
+const SYNC_STATUS_IDS: Record<string, string> = {
+  imported: 'c9c2666f04879d883467e05d1a70e51d',
+  published: 'd1f429393a75beda65e3d506354329b8',
+  failed: '984acf0b1895f1f53e10f747444001a0',
+  skipped: '6691157ddd53af805ba5f00ee6fae101',
+  manual: 'b2d946f612b1eb564630431db14e41f8',
+}
+
 /**
  * Convert date to ISO format for Webflow
  */
@@ -67,6 +76,7 @@ export async function createWebflowItem(data: {
     'source-name': data.sourceName,
     'company-news-provided-by': data.newsProvidedBy,
     'imported-at': toISODate(data.importedAt) || new Date().toISOString(),
+    'sync-status': SYNC_STATUS_IDS.imported,
   }
 
   const response = await fetch(

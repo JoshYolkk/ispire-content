@@ -16,7 +16,7 @@ export interface PressRelease {
   title: string
   slug: { current: string }
   shortDescription?: string
-  bodyText?: any
+  bodyText?: string
   date?: string
   sourceUrl: string
   sourceGuid: string

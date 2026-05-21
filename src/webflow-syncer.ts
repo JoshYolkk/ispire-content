@@ -24,9 +24,7 @@ async function syncToWebflow(release: PressRelease): Promise<string> {
     title: release.title,
     slug: release.slug?.current || '',
     shortDescription: release.shortDescription,
-    bodyText: release.bodyText
-      ? JSON.stringify(release.bodyText)
-      : undefined,
+    bodyText: release.bodyText,
     date: release.date,
     sourceUrl: release.sourceUrl,
     sourceGuid: release.sourceGuid,

@@ -31,6 +31,7 @@ interface RSSItem {
   guid?: string
   pubDate?: string
   contentSnippet?: string
+  content?: string
   'content:encoded'?: string
   creator?: string
   categories?: string[]
@@ -67,30 +68,11 @@ function cleanText(html: string): string {
 }
 
 /**
- * Convert HTML to Sanity portable text blocks
+ * Prepare body content for Sanity
+ * Store as HTML string - Webflow expects HTML for RichText fields
  */
-function htmlToPortableText(html: string): any[] {
-  // Basic conversion - splits into paragraphs
-  // For better HTML handling, consider using @sanity/block-content-from-html
-  const paragraphs = html
-    .split(/<p[^>]*>|<\/p>|<br\s*\/?>/i)
-    .map(p => p.trim())
-    .filter(p => p.length > 0 && !p.match(/^<[^>]+>$/))
-
-  return paragraphs.map(p => ({
-    _type: 'block',
-    _key: Math.random().toString(36).substring(2, 10),
-    children: [
-      {
-        _type: 'span',
-        _key: Math.random().toString(36).substring(2, 10),
-        text: p.replace(/<[^>]*>/g, ''), // Strip remaining HTML
-        marks: [],
-      },
-    ],
-    markDefs: [],
-    style: 'normal',
-  }))
+function prepareBodyContent(html: string): string {
+  return html.trim()
 }
 
 /**
@@ -134,6 +116,9 @@ export async function importRSSFeed(): Promise<{
         continue
       }
 
+      // Use content field (RSS standard) or content:encoded
+      const bodyHtml = item.content || item['content-encoded'] || ''
+
       // Create press release document
       const release: PressRelease = {
         title: item.title,
@@ -141,9 +126,7 @@ export async function importRSSFeed(): Promise<{
         shortDescription: item.contentSnippet
           ? cleanText(item.contentSnippet)
           : undefined,
-        bodyText: item['content:encoded']
-          ? htmlToPortableText(item['content:encoded'])
-          : undefined,
+        bodyText: prepareBodyContent(bodyHtml),
         date: item.pubDate,
         sourceUrl: item.link || '',
         sourceGuid: sourceGuid,
