@@ -7,6 +7,12 @@ dotenv.config()
 const NOTTE_API_TOKEN = process.env.NOTTE_API_TOKEN
 const NEWS_SOURCE_URL = process.env.NEWS_SOURCE_URL || 'https://www.prnewswire.com/news/ispire-technology-inc./'
 
+// Article IDs to skip (different page formats, insufficient content, etc.)
+const SKIP_SOURCE_IDS = [
+  '302759762', // Earnings conference call - different page format
+  '302710165', // ROTH Conference participation - different page format
+]
+
 // Initialize Sanity client
 const sanityClient = createClient({
   projectId: process.env.SANITY_PROJECT_ID || 'edocyjic',
@@ -358,6 +364,15 @@ export async function importWithNotte(): Promise<{
     // Step 2: Import each article (limit to 20 per run)
     for (const article of articles.slice(0, 20)) {
       try {
+        const sourceId = extractSourceId(article.url)
+        
+        // Skip known problem articles
+        if (SKIP_SOURCE_IDS.includes(sourceId)) {
+          console.log(`\nSkipping (known issue): ${article.title.substring(0, 50)}...`)
+          results.skipped++
+          continue
+        }
+        
         // Check for duplicates
         const exists = await existsByGuid(article.url)
         if (exists) {
