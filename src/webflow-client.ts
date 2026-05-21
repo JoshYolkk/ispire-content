@@ -48,13 +48,30 @@ function toISODate(date: string | undefined): string | undefined {
 /**
  * Convert markdown to HTML for Webflow RichText
  * Handles links: [text](url) -> <a href="url">text</a>
+ * Strips tables (not supported in Webflow RichText)
  */
 function markdownToHtml(markdown: string | undefined): string | undefined {
   if (!markdown) return undefined
   
   try {
+    // Strip markdown tables (lines with | characters and separator rows)
+    // Tables have the pattern: | cell | cell | ... |
+    let cleaned = markdown
+      .split('\n')
+      .filter(line => {
+        // Skip lines that look like table rows (have multiple | characters)
+        const pipeCount = (line.match(/\|/g) || []).length
+        if (pipeCount >= 2) return false
+        // Skip table separator rows (e.g., |---|---|)
+        if (line.match(/^\s*\|[\s\-:]+\|/)) return false
+        // Skip "-- Tables Follow --" markers
+        if (line.includes('-- Tables Follow --')) return false
+        return true
+      })
+      .join('\n')
+    
     // Use marked to convert markdown to HTML
-    const html = marked.parse(markdown, {
+    const html = marked.parse(cleaned, {
       breaks: true, // Convert line breaks to <br>
       gfm: true, // GitHub Flavored Markdown
     }) as string
