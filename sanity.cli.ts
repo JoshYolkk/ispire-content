@@ -5,4 +5,5 @@ export default defineCliConfig({
     projectId: 'edocyjic',
     dataset: 'production',
   },
+  studioHost: 'ispire-content',
 })
