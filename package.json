@@ -29,6 +29,7 @@
     "@sanity/client": "^6.21.0",
     "@sanity/vision": "^3.68.0",
     "dotenv": "^16.4.5",
+    "marked": "^18.0.4",
     "notte-sdk": "^0.0.5",
     "rss-parser": "^3.13.0",
     "sanity": "^3.68.0",

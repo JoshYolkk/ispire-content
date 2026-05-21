@@ -1,4 +1,5 @@
 import dotenv from 'dotenv'
+import { marked } from 'marked'
 
 dotenv.config()
 
@@ -45,6 +46,27 @@ function toISODate(date: string | undefined): string | undefined {
 }
 
 /**
+ * Convert markdown to HTML for Webflow RichText
+ * Handles links: [text](url) -> <a href="url">text</a>
+ */
+function markdownToHtml(markdown: string | undefined): string | undefined {
+  if (!markdown) return undefined
+  
+  try {
+    // Use marked to convert markdown to HTML
+    const html = marked.parse(markdown, {
+      breaks: true, // Convert line breaks to <br>
+      gfm: true, // GitHub Flavored Markdown
+    }) as string
+    
+    return html
+  } catch (error) {
+    console.warn('Failed to convert markdown to HTML:', error)
+    return markdown
+  }
+}
+
+/**
  * Create a new item in Webflow collection
  */
 export async function createWebflowItem(data: {
@@ -68,7 +90,7 @@ export async function createWebflowItem(data: {
     slug: data.slug,
     title: data.title,
     'short-description': data.shortDescription,
-    body: data.bodyText,
+    body: markdownToHtml(data.bodyText), // Convert markdown to HTML for Webflow RichText
     date: toISODate(data.date),
     'source-url': data.sourceUrl,
     'source-guid': data.sourceGuid,
@@ -120,7 +142,7 @@ export async function updateWebflowItem(
     slug: data.slug,
     title: data.title,
     'short-description': data.shortDescription,
-    body: data.bodyText,
+    body: markdownToHtml(data.bodyText),
     date: toISODate(data.date),
   }
 
