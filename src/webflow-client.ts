@@ -6,31 +6,6 @@ const WEBFLOW_API_URL = 'https://api.webflow.com/v2'
 const WEBFLOW_API_TOKEN = process.env.WEBFLOW_API_TOKEN
 const WEBFLOW_COLLECTION_ID = process.env.WEBFLOW_COLLECTION_ID
 
-interface WebflowItem {
-  id: string
-  slug: string
-  name: string
-  _archived: boolean
-  _draft: boolean
-  fieldData: {
-    name: string
-    slug: string
-    'hero-image'?: { url: string; alt?: string }
-    'thumbnail-image'?: { url: string; alt?: string }
-    title: string
-    'short-description'?: string
-    'body-text'?: string
-    date?: string
-    'source-url'?: string
-    'source-guid'?: string
-    'source-id'?: string
-    'source-name'?: string
-    'company-news-provided-by'?: string
-    'imported-at'?: string
-    'sync-status'?: string
-  }
-}
-
 interface WebflowResponse {
   id: string
   slug: string
@@ -39,12 +14,24 @@ interface WebflowResponse {
 }
 
 /**
- * Create headers forWebflow API requests
+ * Create headers for Webflow API requests
  */
 function getHeaders(): HeadersInit {
   return {
     'Authorization': `Bearer ${WEBFLOW_API_TOKEN}`,
     'Content-Type': 'application/json',
+  }
+}
+
+/**
+ * Convert date to ISO format for Webflow
+ */
+function toISODate(date: string | undefined): string | undefined {
+  if (!date) return undefined
+  try {
+    return new Date(date).toISOString()
+  } catch {
+    return undefined
   }
 }
 
@@ -66,27 +53,29 @@ export async function createWebflowItem(data: {
   heroImage?: { url: string; alt?: string }
   thumbnailImage?: { url: string; alt?: string }
 }): Promise<string> {
+  // Map to correct Webflow field slugs
+  const fieldData: any = {
+    name: data.title,
+    slug: data.slug,
+    title: data.title,
+    'short-description': data.shortDescription,
+    body: data.bodyText,
+    date: toISODate(data.date),
+    'source-url': data.sourceUrl,
+    'source-guid': data.sourceGuid,
+    'source-id-pr-newswire-id': data.sourceId,
+    'source-name': data.sourceName,
+    'company-news-provided-by': data.newsProvidedBy,
+    'imported-at': toISODate(data.importedAt) || new Date().toISOString(),
+  }
+
   const response = await fetch(
     `${WEBFLOW_API_URL}/collections/${WEBFLOW_COLLECTION_ID}/items`,
     {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({
-        fieldData: {
-          name: data.title,
-          slug: data.slug,
-          title: data.title,
-          'short-description': data.shortDescription,
-          'body-text': data.bodyText,
-          date: data.date,
-          'source-url': data.sourceUrl,
-          'source-guid': data.sourceGuid,
-          'source-id': data.sourceId,
-          'source-name': data.sourceName,
-          'company-news-provided-by': data.newsProvidedBy,
-          'imported-at': data.importedAt,
-          'sync-status': 'imported',
-        },
+        fieldData,
         _archived: false,
         _draft: false,
       }),
@@ -116,22 +105,21 @@ export async function updateWebflowItem(
     syncStatus?: string
   }
 ): Promise<void> {
+  const fieldData: any = {
+    name: data.title,
+    slug: data.slug,
+    title: data.title,
+    'short-description': data.shortDescription,
+    body: data.bodyText,
+    date: toISODate(data.date),
+  }
+
   const response = await fetch(
     `${WEBFLOW_API_URL}/collections/${WEBFLOW_COLLECTION_ID}/items/${itemId}`,
     {
       method: 'PATCH',
       headers: getHeaders(),
-      body: JSON.stringify({
-        fieldData: {
-          name: data.title,
-          slug: data.slug,
-          title: data.title,
-          'short-description': data.shortDescription,
-          'body-text': data.bodyText,
-          date: data.date,
-          'sync-status': data.syncStatus,
-        },
-      }),
+      body: JSON.stringify({ fieldData }),
     }
   )
 
