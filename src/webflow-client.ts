@@ -34,6 +34,26 @@ const SYNC_STATUS_IDS: Record<string, string> = {
 }
 
 /**
+ * Extract clean URL from PRNewswire tracking link
+ * edge.prnewswire.com/c/link/?...&u=ACTUAL_URL&a=...
+ */
+function extractCleanUrl(url: string): string {
+  try {
+    // Check if it's a PRNewswire tracking link
+    if (url.includes('prnewswire.com') && url.includes('u=')) {
+      const uParamMatch = url.match(/[?&]u=([^&]+)/)
+      if (uParamMatch) {
+        const decoded = decodeURIComponent(uParamMatch[1])
+        return decoded
+      }
+    }
+    return url
+  } catch {
+    return url
+  }
+}
+
+/**
  * Convert date to ISO format for Webflow
  */
 function toISODate(date: string | undefined): string | undefined {
@@ -49,14 +69,25 @@ function toISODate(date: string | undefined): string | undefined {
  * Convert markdown to HTML for Webflow RichText
  * Handles links: [text](url) -> <a href="url">text</a>
  * Strips tables (not supported in Webflow RichText)
+ * Cleans PRNewswire tracking URLs
  */
 function markdownToHtml(markdown: string | undefined): string | undefined {
   if (!markdown) return undefined
   
   try {
+    // First, clean up PRNewswire tracking URLs in the markdown
+    // Convert edge.prnewswire.com/c/link/?...&u=ACTUAL_URL&a=... -> ACTUAL_URL
+    let cleaned = markdown.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^)]+prnewswire[^)]+)\)/g,
+      (match, text, url) => {
+        const cleanUrl = extractCleanUrl(url)
+        return `[${text}](${cleanUrl})`
+      }
+    )
+    
     // Strip markdown tables (lines with | characters and separator rows)
     // Tables have the pattern: | cell | cell | ... |
-    let cleaned = markdown
+    cleaned = cleaned
       .split('\n')
       .filter(line => {
         // Skip lines that look like table rows (have multiple | characters)
@@ -71,7 +102,7 @@ function markdownToHtml(markdown: string | undefined): string | undefined {
       .join('\n')
     
     // Use marked to convert markdown to HTML
-    const html = marked.parse(cleaned, {
+    let html = marked.parse(cleaned, {
       breaks: true, // Convert line breaks to <br>
       gfm: true, // GitHub Flavored Markdown
     }) as string
