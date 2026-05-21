@@ -1,4 +1,4 @@
-name: Scheduled RSS Import & Webflow Sync
+name: Scheduled PR Newswire Import & Webflow Sync
 
 on:
   schedule:
@@ -24,13 +24,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run RSS import
-        run: npm run import
+      - name: Run Notte import (Ispire-specific articles)
+        run: npm run notte
         env:
           SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
           SANITY_DATASET: ${{ secrets.SANITY_DATASET }}
           SANITY_API_TOKEN: ${{ secrets.SANITY_API_TOKEN }}
-          RSS_FEED_URL: ${{ secrets.RSS_FEED_URL }}
+          NOTTE_API_TOKEN: ${{ secrets.NOTTE_API_TOKEN }}
+          NEWS_SOURCE_URL: ${{ secrets.NEWS_SOURCE_URL }}
 
       - name: Run Webflow sync
         run: npm run sync

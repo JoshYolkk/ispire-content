@@ -1,6 +1,7 @@
 import dotenv from 'dotenv'
 import { runRSSImport } from './rss-importer.js'
 import { runWebflowSync } from './webflow-syncer.js'
+import { runNotteImport } from './notte-scraper.js'
 
 dotenv.config()
 
@@ -22,7 +23,16 @@ async function main() {
     switch (command) {
       case 'import':
       case 'rss':
+        // Legacy RSS importer (may pull wrong articles)
+        console.log('\n⚠️  Using RSS importer - may pull unrelated articles')
+        console.log('    Use "npm run notte" for Ispire-specific articles\n')
         await runRSSImport()
+        break
+
+      case 'notte':
+      case 'scrape':
+        // New Notte-based importer (Ispire-specific, full content)
+        await runNotteImport()
         break
 
       case 'sync':
@@ -31,18 +41,26 @@ async function main() {
         break
 
       case 'all':
-        console.log('\n--- Running RSS Import ---\n')
-        await runRSSImport()
+        console.log('\n--- Running Notte Import ---\n')
+        await runNotteImport()
         console.log('\n--- Running Webflow Sync ---\n')
+        await runWebflowSync()
+        break
+
+      case 'full':
+        // Full pipeline: Notte import + Webflow sync
+        console.log('\n--- Running Full Pipeline ---\n')
+        await runNotteImport()
         await runWebflowSync()
         break
 
       default:
         console.error(`Unknown command: ${command}`)
         console.log('\nUsage:')
-        console.log('  npm run job import   - Import RSS feed to Sanity')
-        console.log('  npm run job sync     - Sync Sanity to Webflow')
-        console.log('  npm run job all      - Run both jobs')
+        console.log('  npm run notte     - Import from PR Newswire (Ispire-specific, full content)')
+        console.log('  npm run import    - Import from RSS feed (legacy, may pull unrelated)')
+        console.log('  npm run sync      - Sync Sanity to Webflow')
+        console.log('  npm run job all   - Run Notte import + Webflow sync')
         process.exit(1)
     }
 

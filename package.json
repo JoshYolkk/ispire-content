@@ -12,6 +12,7 @@
     "deploy": "sanity deploy",
     "job": "tsx src/index.ts",
     "import": "tsx src/index.ts import",
+    "notte": "tsx src/index.ts notte",
     "sync": "tsx src/index.ts sync"
   },
   "keywords": [
@@ -28,6 +29,7 @@
     "@sanity/client": "^6.21.0",
     "@sanity/vision": "^3.68.0",
     "dotenv": "^16.4.5",
+    "notte-sdk": "^0.0.5",
     "rss-parser": "^3.13.0",
     "sanity": "^3.68.0",
     "styled-components": "^6.1.15"
