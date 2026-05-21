@@ -1,0 +1,179 @@
+import dotenv from 'dotenv'
+
+dotenv.config()
+
+const WEBFLOW_API_URL = 'https://api.webflow.com/v2'
+const WEBFLOW_API_TOKEN = process.env.WEBFLOW_API_TOKEN
+const WEBFLOW_COLLECTION_ID = process.env.WEBFLOW_COLLECTION_ID
+
+interface WebflowItem {
+  id: string
+  slug: string
+  name: string
+  _archived: boolean
+  _draft: boolean
+  fieldData: {
+    name: string
+    slug: string
+    'hero-image'?: { url: string; alt?: string }
+    'thumbnail-image'?: { url: string; alt?: string }
+    title: string
+    'short-description'?: string
+    'body-text'?: string
+    date?: string
+    'source-url'?: string
+    'source-guid'?: string
+    'source-id'?: string
+    'source-name'?: string
+    'company-news-provided-by'?: string
+    'imported-at'?: string
+    'sync-status'?: string
+  }
+}
+
+interface WebflowResponse {
+  id: string
+  slug: string
+  name: string
+  [key: string]: any
+}
+
+/**
+ * Create headers forWebflow API requests
+ */
+function getHeaders(): HeadersInit {
+  return {
+    'Authorization': `Bearer ${WEBFLOW_API_TOKEN}`,
+    'Content-Type': 'application/json',
+  }
+}
+
+/**
+ * Create a new item in Webflow collection
+ */
+export async function createWebflowItem(data: {
+  title: string
+  slug: string
+  shortDescription?: string
+  bodyText?: string
+  date?: string
+  sourceUrl?: string
+  sourceGuid?: string
+  sourceId?: string
+  sourceName?: string
+  newsProvidedBy?: string
+  importedAt?: string
+  heroImage?: { url: string; alt?: string }
+  thumbnailImage?: { url: string; alt?: string }
+}): Promise<string> {
+  const response = await fetch(
+    `${WEBFLOW_API_URL}/collections/${WEBFLOW_COLLECTION_ID}/items`,
+    {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        fieldData: {
+          name: data.title,
+          slug: data.slug,
+          title: data.title,
+          'short-description': data.shortDescription,
+          'body-text': data.bodyText,
+          date: data.date,
+          'source-url': data.sourceUrl,
+          'source-guid': data.sourceGuid,
+          'source-id': data.sourceId,
+          'source-name': data.sourceName,
+          'company-news-provided-by': data.newsProvidedBy,
+          'imported-at': data.importedAt,
+          'sync-status': 'imported',
+        },
+        _archived: false,
+        _draft: false,
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Webflow API error (${response.status}): ${error}`)
+  }
+
+  const result: WebflowResponse = await response.json()
+  return result.id
+}
+
+/**
+ * Update an existing item in Webflow collection
+ */
+export async function updateWebflowItem(
+  itemId: string,
+  data: {
+    title?: string
+    slug?: string
+    shortDescription?: string
+    bodyText?: string
+    date?: string
+    syncStatus?: string
+  }
+): Promise<void> {
+  const response = await fetch(
+    `${WEBFLOW_API_URL}/collections/${WEBFLOW_COLLECTION_ID}/items/${itemId}`,
+    {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        fieldData: {
+          name: data.title,
+          slug: data.slug,
+          title: data.title,
+          'short-description': data.shortDescription,
+          'body-text': data.bodyText,
+          date: data.date,
+          'sync-status': data.syncStatus,
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Webflow API error (${response.status}): ${error}`)
+  }
+}
+
+/**
+ * Delete an item from Webflow collection
+ */
+export async function deleteWebflowItem(itemId: string): Promise<void> {
+  const response = await fetch(
+    `${WEBFLOW_API_URL}/collections/${WEBFLOW_COLLECTION_ID}/items/${itemId}`,
+    {
+      method: 'DELETE',
+      headers: getHeaders(),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Webflow API error (${response.status}): ${error}`)
+  }
+}
+
+/**
+ * Get collection schema to verify field IDs match
+ */
+export async function getCollectionSchema(): Promise<any> {
+  const response = await fetch(
+    `${WEBFLOW_API_URL}/collections/${WEBFLOW_COLLECTION_ID}`,
+    {
+      headers: getHeaders(),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Webflow API error (${response.status}): ${error}`)
+  }
+
+  return response.json()
+}

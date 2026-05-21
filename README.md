@@ -1,21 +1,25 @@
-# Ispire Content - Sanity Studio
+# Ispire Content
 
-A Sanity CMS project for managing Ispire Technology press releases with future Webflow CMS integration.
+Sanity Studio for managing Ispire Technology press releases with automated RSS import and Webflow CMS sync.
 
-## Overview
+## Architecture
 
-This Sanity Studio instance manages press releases that are:
-1. Imported from PR Newswire RSS feeds
-2. Edited/enriched in Sanity as needed
-3. Synced to a Webflow CMS collection for public display
+```
+PR Newswire RSS → Sanity CMS → Webflow CMS
+                    ↓
+              Sanity Studio (UI)
+```
 
-## Prerequisites
+## Features
 
-- Node.js 18+ 
-- npm or pnpm
-- A Sanity account (free tier works)
+- **Sanity Studio** - Content management interface
+- **RSS Import** - Automatically import PR Newswire feed
+- **Webflow Sync** - Sync content to Webflow CMS collection
+- **Duplicate Prevention** - Skip already-imported articles by GUID
+- **Error Handling** - Track failures and retry automatically
+- **Scheduled Jobs** - GitHub Actions runs hourly (configurable)
 
-## Setup
+## Quick Start
 
 ### 1. Install Dependencies
 
@@ -23,126 +27,179 @@ This Sanity Studio instance manages press releases that are:
 npm install
 ```
 
-### 2. Create Sanity Project
+### 2. Configure Environment
 
-If you haven't already created a Sanity project:
-
-```bash
-npx sanity init
-```
-
-This will:
-- Prompt you to log in to Sanity (or create an account)
-- Create a new project or link to existing
-- Generate a project ID
-
-### 3. Configure Environment
-
-Copy the example environment file:
+Copy `.env.example` to `.env` and fill in your values:
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 
-Edit `.env.local` with your values:
+Required environment variables:
 - `SANITY_PROJECT_ID` - Your Sanity project ID
-- `SANITY_DATASET` - Dataset name (default: `production`)
-- `SANITY_API_TOKEN` - API token for server operations
+- `SANITY_DATASET` - Dataset name (default: production)
+- `SANITY_API_TOKEN` - Sanity API token with read/write access
+- `WEBFLOW_API_TOKEN` - Webflow API token
+- `WEBFLOW_COLLECTION_ID` - Webflow CMS collection ID
+- `RSS_FEED_URL` - RSS feed URL (optional, defaults to PR Newswire)
 
-### 4. Run Locally (Optional)
+### 3. Run the Studio Locally
 
 ```bash
 npm run dev
 ```
 
-Opens the Sanity Studio at `http://localhost:3333`
+Open http://localhost:3333 to access the Studio.
 
-## Deployment
-
-### Deploy to Sanity Hosting
+### 4. Deploy Studio
 
 ```bash
 npm run deploy
 ```
 
-This deploys the Studio to `https://your-project-name.sanity.studio`
+The Studio will be available at: https://ispire-content.sanity.studio
+
+## Running Jobs
+
+### Manual Execution
+
+Run all jobs:
+```bash
+npm run job all
+```
+
+Import RSS feed only:
+```bash
+npm run import
+```
+
+Sync to Webflow only:
+```bash
+npm run sync
+```
+
+### Scheduled Execution (GitHub Actions)
+
+The project includes a GitHub Actions workflow that runs hourly:
+
+1. Go to your GitHub repo → Settings → Secrets and variables → Actions
+2. Add the following secrets:
+   - `SANITY_PROJECT_ID` - `edocyjic`
+   - `SANITY_DATASET` - `production`
+   - `SANITY_API_TOKEN` - Your Sanity API token
+   - `WEBFLOW_API_TOKEN` - Your Webflow API token
+   - `WEBFLOW_COLLECTION_ID` - Your Webflow collection ID
+   - `RSS_FEED_URL` - (optional) Custom RSS feed URL
+
+3. Enable GitHub Actions in your repository settings
+4. The workflow will run automatically every hour, or you can trigger it manually from the Actions tab
 
 ## Project Structure
 
 ```
 ispire-content/
-├── sanity.config.ts     # Studio configuration
 ├── schemas/
-│   ├── index.ts         # Schema exports
-│   └── pressRelease.ts  # Press Release schema
-├── package.json
-├── tsconfig.json
-├── .env.example         # Environment template
-└── .env.local           # Your local config (gitignored)
+│   ├── index.ts           # Schema exports
+│   └── pressRelease.ts    # Press release schema
+├── src/
+│   ├── index.ts           # Main entry point
+│   ├── sanity-client.ts   # Sanity CMS client
+│   ├── webflow-client.ts  # Webflow API client
+│   ├── rss-importer.ts    # RSS feed import logic
+│   └── webflow-syncer.ts  # Webflow sync logic
+├── .github/
+│   └── workflows/
+│       └── scheduled-sync.yml  # GitHub Actions workflow
+├── sanity.config.ts       # Studio configuration
+├── sanity.cli.ts          # CLI configuration
+├── .env                   # Environment variables (gitignored)
+├── .env.example           # Environment template
+└── README.md
 ```
 
-## Schema: Press Release
+## Press Release Schema
 
-The `pressRelease` schema contains:
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | string | Article title (required) |
+| `slug` | slug | URL slug from title (required) |
+| `shortDescription` | text | Brief summary |
+| `bodyText` | array | Rich text content |
+| `date` | datetime | Publication date |
+| `sourceUrl` | url | Original article URL (required) |
+| `sourceGuid` | string | Unique RSS GUID (required) |
+| `sourceId` | string | PR Newswire ID |
+| `sourceName` | string | Source name (default: PR Newswire) |
+| `newsProvidedBy` | string | Company name |
+| `importedAt` | datetime | Import timestamp |
+| `syncStatus` | string | imported/published/failed/skipped/manual |
+| `webflowItemId` | string | Webflow collection item ID |
+| `webflowSyncedAt` | datetime | Last sync timestamp |
+| `syncError` | text | Last sync error message |
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| title | string | ✅ | Press release headline |
-| slug | slug | ✅ | URL-friendly identifier (auto from title) |
-| shortDescription | text | | Brief summary |
-| bodyText | array (blocks) | | Fullarticle content |
-| date | datetime | | Publication date |
-| sourceUrl | url | ✅ | Original PR Newswire URL |
-| sourceGuid | string | ✅ | Unique RSS GUID (deduplication) |
-| sourceId | string | | PR Newswire numeric ID |
-| sourceName | string | | Default: "PR Newswire" |
-| newsProvidedBy | string | | Default: "Ispire Technology Inc." |
-| importedAt | datetime | | Import timestamp |
-| syncStatus | string | | imported/published/failed/skipped/manual |
-| webflowItemId | string | | Webflow CMS item ID after sync |
-| webflowSyncedAt | datetime | | Last sync timestamp |
-| syncError | text | | Error message if sync failed |
+## Sync Flow
 
-## Future Integration
+1. **RSS Import** (`npm run import`)
+   - Fetches PR Newswire RSS feed
+   - Parses each item
+   - Checks for duplicates by `sourceGuid`
+   - Creates new Sanity documents for new items
 
-### RSS Import (Planned)
+2. **Webflow Sync** (`npm run sync`)
+   - Queries Sanity for items with `syncStatus: 'imported'` and no `webflowItemId`
+   - Creates items in Webflow CMS collection
+   - Updates Sanity with `webflowItemId` and `syncStatus: 'published'`
+   - Tracks failed syncs with error messages
 
-The following RSS feed will be used:
-```
-https://www.prnewswire.com/rss/news-releases-list.rss?company=ispire-technology-inc
-```
+3. **Error Handling**
+   - Failed syncs are marked with `syncStatus: 'failed'`
+   - Failures are tracked with a counter
+   - Items failing 3+ times can trigger alerts (configured in code)
 
-### Webflow Sync (Planned)
+## APIs Used
 
-Press releases will be synced to a Webflow CMS collection with matching fields.
+- **Sanity CMS API** - Content storage and management
+- **Webflow CMS API v2** - Webflow collection management
+- **RSS Parser** - RSS feed parsing
 
-## Testing
+## URLs
 
-Sanity provides built-in validation. To test the schema:
+| Resource | URL |
+|----------|-----|
+| GitHub Repo | https://github.com/JoshYolkk/ispire-content |
+| Sanity Studio | https://ispire-content.sanity.studio |
+| Sanity Project | https://www.sanity.io/projects/edocyjic |
+| RSS Feed | https://www.prnewswire.com/rss/news-releases-list.rss?company=ispire-technology-inc |
+
+## Development
+
+### Local Development
 
 ```bash
+# Start Studio in development mode
 npm run dev
+
+# Build for production
+npm run build
+
+# Deploy Studio
+npm run deploy
 ```
 
-Then create/editdocuments in the Studio.
+### Testing Jobs Locally
 
-## Missing Configuration
+```bash
+# Make sure environment variables are set in .env
+npm run import  # Test RSS import
+npm run sync    # Test Webflow sync
+```
 
-Before RSS/Webflow automation can proceed, you need:
+## Notes
 
-1. **Sanity Project ID** - Create via `npx sanity init` or at https://sanity.io/manage
-2. **Sanity API Token** - Generate in project settings
-3. **Webflow API Token** - For future CMS sync
-4. **Webflow Collection ID** - Target collection for sync
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start local development studio |
-| `npm run start` | Start production build locally |
-| `npm run build` | Build the studio |
-| `npm run deploy` | Deploy to Sanity hosting |
+- **Duplicate Prevention**: The `sourceGuid` field ensures articles aren't imported twice
+- **Rate Limiting**: Small delays between API calls to respect rate limits
+- **Error Recovery**: Failed items can be retried manually or automatically
+- **GitHub Actions**: Free tier includes 2000 minutes/month - sufficient for hourly runs
 
 ## License
 

@@ -2,32 +2,42 @@
   "name": "ispire-content",
   "private": true,
   "version": "1.0.0",
-  "description": "Sanity Studio for managing Ispire press releases",
+  "description": "Sanity Studio for managing Ispire press releases with RSS import and Webflow sync",
   "main": "package.json",
+  "type": "module",
   "scripts": {
     "dev": "sanity dev",
     "start": "sanity start",
     "build": "sanity build",
-    "deploy": "sanity deploy"
+    "deploy": "sanity deploy",
+    "job": "tsx src/index.ts",
+    "import": "tsx src/index.ts import",
+    "sync": "tsx src/index.ts sync"
   },
   "keywords": [
     "sanity",
     "cms",
     "press-releases",
-    "ispire"
+    "ispire",
+    "webflow",
+    "rss"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "sanity": "^3.68.0",
+    "@sanity/client": "^6.21.0",
     "@sanity/vision": "^3.68.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "dotenv": "^16.4.5",
+    "rss-parser": "^3.13.0",
+    "sanity": "^3.68.0",
     "styled-components": "^6.1.15"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.15.0",
     "typescript": "^5.5.4"
   }
 }
