@@ -157,7 +157,7 @@ export async function createWebflowItem(data: {
       body: JSON.stringify({
         fieldData,
         _archived: false,
-        _draft: true, // Keep items in draft state
+        _draft: false,
       }),
     }
   )

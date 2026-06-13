@@ -24,6 +24,14 @@ export const pressRelease = defineType({
     }),
     
     defineField({
+      name: 'shortDescription',
+      title: 'Short Description',
+      type: 'text',
+      rows: 3,
+      description: 'AI-generated 2-3 sentence summary for preview cards and SEO.',
+    }),
+    
+    defineField({
       name: 'bodyText',
       title: 'Body Text',
       type: 'text',

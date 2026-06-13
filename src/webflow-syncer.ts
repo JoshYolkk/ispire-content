@@ -15,17 +15,56 @@ const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 5000
 
 /**
+ * Validate article date is reasonable
+ * - Not in the future beyond current date
+ * - Not older than 2 years (for press releases)
+ * - Returns validated date or throws error
+ */
+function validateDate(dateStr: string | undefined, title: string): string {
+  if (!dateStr) {
+    throw new Error(`Missing date for: ${title}`)
+  }
+  
+  const date = new Date(dateStr)
+  const now = new Date()
+  const twoYearsAgo = new Date()
+  twoYearsAgo.setFullYear(now.getFullYear() - 2)
+  
+  if (isNaN(date.getTime())) {
+    throw new Error(`Invalid date format '${dateStr}' for: ${title}`)
+  }
+  
+  // Allow dates up to 1 day in the future (timezone tolerance)
+  const tomorrow = new Date(now)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  
+  if (date > tomorrow) {
+    throw new Error(`Date ${dateStr} is in the future for: ${title}`)
+  }
+  
+  if (date < twoYearsAgo) {
+    console.warn(`Warning: Date ${dateStr} is older than 2 years for: ${title}`)
+  }
+  
+  return date.toISOString()
+}
+
+/**
  * Sync a single press release to Webflow
  */
 async function syncToWebflow(release: PressRelease): Promise<string> {
   console.log(`Syncing to Webflow: ${release.title}`)
+  
+  // Validate date before syncing
+  const validatedDate = validateDate(release.date, release.title)
+  console.log(`  Date: ${validatedDate.substring(0, 10)}`)
 
   const webflowItemId = await createWebflowItem({
     title: release.title,
     slug: release.slug?.current || '',
     shortDescription: release.shortDescription,
     bodyText: release.bodyText,
-    date: release.date,
+    date: validatedDate,
     sourceUrl: release.sourceUrl,
     sourceGuid: release.sourceGuid,
     sourceId: release.sourceId,

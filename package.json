@@ -13,6 +13,7 @@
     "job": "tsx src/index.ts",
     "import": "tsx src/index.ts import",
     "notte": "tsx src/index.ts notte",
+    "process": "tsx src/index.ts process",
     "sync": "tsx src/index.ts sync"
   },
   "keywords": [

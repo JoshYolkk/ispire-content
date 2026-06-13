@@ -13,7 +13,8 @@ PR Newswire RSS → Sanity CMS → Webflow CMS
 ## Features
 
 - **Sanity Studio** - Content management interface
-- **RSS Import** - Automatically import PR Newswire feed
+- **Notte Scraper** - Import from PR Newswire with full article content
+- **AI Processing** - Improve article formatting and generate descriptions
 - **Webflow Sync** - Sync content to Webflow CMS collection
 - **Duplicate Prevention** - Skip already-imported articles by GUID
 - **Error Handling** - Track failures and retry automatically
@@ -63,20 +64,51 @@ The Studio will be available at: https://ispire-content.sanity.studio
 
 ### Manual Execution
 
-Run all jobs:
+Run full pipeline (import + AI process + sync):
 ```bash
 npm run job all
 ```
 
-Import RSS feed only:
+Import from PR Newswire (Notte scraper):
 ```bash
-npm run import
+npm run notte
+```
+
+AI processing (improve formatting, add descriptions):
+```bash
+npm run process
 ```
 
 Sync to Webflow only:
 ```bash
 npm run sync
 ```
+
+Test AI processing on a specific article:
+```bash
+npm run job test-ai <document-id>
+```
+
+### AI Processing Details
+
+The AI processing step uses OpenAI's GPT-4o to:
+
+1. **Clean up markdown formatting** - Fix broken links, proper paragraph spacing
+2. **Convert tables to HTML** - Finance tables and data lists get proper `<table>` markup
+3. **Add heading structure** - `##` and `###` for sections like "About Ispire", "Forward Looking Statements"
+4. **Generate short descriptions** - 2-3 sentence summary suitable for preview cards and SEO
+5. **Preserve all content** - Never changes facts, numbers, names, or quotes
+
+Articles are only processed if:
+- They have no short description, or
+- Their description is less than 50 characters
+
+To use AI processing, add `OPENAI_API_KEY` to your `.env` file:
+```
+OPENAI_API_KEY=sk-your-api-key-here
+```
+
+Get your API key from: https://platform.openai.com/api-keys
 
 ### Scheduled Execution (GitHub Actions)
 

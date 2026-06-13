@@ -131,7 +131,8 @@ function extractArticleLinks(content: string): Array<{ title: string; url: strin
 function extractArticleContent(markdown: string, articleUrl: string): { 
   title: string
   shortDescription: string
-  body: string 
+  body: string
+  date: Date | null
 } {
   const lines = markdown.split('\n')
   
@@ -254,10 +255,48 @@ function extractArticleContent(markdown: string, articleUrl: string): {
     }
   }
   
+  // Extract publication date
+  let date: Date | null = null
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    // Pattern: May 12, 2026, 08:30 ET
+    const match = line.match(/(\w+\.?\s+\d{1,2},?\s+\d{4})/)
+    if (match) {
+      const months: Record<string, number> = {
+        'january': 0, 'jan': 0, 'jan.': 0,
+        'february': 1, 'feb': 1, 'feb.': 1,
+        'march': 2, 'mar': 2, 'mar.': 2,
+        'april': 3, 'apr': 3, 'apr.': 3,
+        'may': 4,
+        'june': 5, 'jun': 5, 'jun.': 5,
+        'july': 6, 'jul': 6, 'jul.': 6,
+        'august': 7, 'aug': 7, 'aug.': 7,
+        'september': 8, 'sep': 8, 'sep.': 8, 'sept': 8, 'sept.': 8,
+        'october': 9, 'oct': 9, 'oct.': 9,
+        'november': 10, 'nov': 10, 'nov.': 10,
+        'december': 11, 'dec': 11, 'dec.': 11,
+      }
+      const dateMatch = match[1].match(/(\w+)\.?\s+(\d{1,2}),?\s+(\d{4})/)
+      if (dateMatch) {
+        const monthName = dateMatch[1].toLowerCase()
+        const day = parseInt(dateMatch[2])
+        const year = parseInt(dateMatch[3])
+        if (months[monthName] !== undefined) {
+          date = new Date(Date.UTC(year, months[monthName], day))
+          // Log extracted date for debugging
+          console.log(`  Extracted date: ${date.toISOString().substring(0, 10)} from "${match[1]}"`)
+          break
+        }
+      }
+    }
+  }
+  
   return {
     title: title || 'Untitled Press Release',
     shortDescription,
-    body: body.substring(0, 100000)
+    body: body.substring(0, 100000),
+    date
   }
 }
 
@@ -281,6 +320,8 @@ async function createPressRelease(article: {
     shortDescription: article.shortDescription,
     bodyText: article.body,
     date: article.date ? new Date(article.date).toISOString() : new Date().toISOString(),
+    // Store original date string for debugging
+    _originalDate: article.date || null,
     sourceUrl: article.url,
     sourceGuid: sourceGuid,
     sourceId: sourceId,
@@ -404,7 +445,7 @@ export async function importWithNotte(): Promise<{
           }
           
           // Extract clean content
-          const { title, shortDescription, body } = extractArticleContent(articleMarkdown, article.url)
+          const { title, shortDescription, body, date } = extractArticleContent(articleMarkdown, article.url)
           
           console.log(`Title: ${title}`)
           console.log(`Body length: ${body.length} chars`)
@@ -439,6 +480,7 @@ export async function importWithNotte(): Promise<{
             url: article.url,
             body: finalBody,
             shortDescription: finalShortDesc,
+            date: date || new Date(),
           })
 
           console.log(`✓ Imported: ${title.substring(0, 50)}... (${docId})`)
