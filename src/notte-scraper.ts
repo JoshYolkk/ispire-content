@@ -1,6 +1,7 @@
 import dotenv from 'dotenv'
 import { NotteClient } from 'notte-sdk'
 import { createClient } from '@sanity/client'
+import { cleanContent, needsCleanup } from './ai-cleaner.js'
 
 dotenv.config()
 
@@ -255,6 +256,7 @@ function extractArticleContent(markdown: string, articleUrl: string): {
   
   return {
     title: title || 'Untitled Press Release',
+    shortDescription,
     body: body.substring(0, 100000)
   }
 }
@@ -266,6 +268,7 @@ async function createPressRelease(article: {
   title: string
   url: string
   body: string
+  shortDescription?: string
   date?: string
 }): Promise<string> {
   const sourceGuid = article.url
@@ -275,6 +278,7 @@ async function createPressRelease(article: {
     _type: 'pressRelease',
     title: article.title,
     slug: { _type: 'slug', current: generateSlug(article.title) },
+    shortDescription: article.shortDescription,
     bodyText: article.body,
     date: article.date ? new Date(article.date).toISOString() : new Date().toISOString(),
     sourceUrl: article.url,
@@ -400,16 +404,41 @@ export async function importWithNotte(): Promise<{
           }
           
           // Extract clean content
-          const { title, body } = extractArticleContent(articleMarkdown, article.url)
+          const { title, shortDescription, body } = extractArticleContent(articleMarkdown, article.url)
           
           console.log(`Title: ${title}`)
           console.log(`Body length: ${body.length} chars`)
           
+          // AI cleanup if needed
+          let finalTitle = title
+          let finalShortDesc = shortDescription
+          let finalBody = body
+          
+          if (needsCleanup({ title, body })) {
+            console.log('Running AI cleanup...')
+            const cleaned = await cleanContent({
+              title,
+              shortDescription,
+              body,
+              sourceUrl: article.url
+            })
+            finalTitle = cleaned.title
+            finalShortDesc = cleaned.shortDescription
+            finalBody = cleaned.body
+            
+            if (cleaned.changes.length > 0) {
+              console.log(`AI fixes: ${cleaned.changes.join(', ')}`)
+            }
+          } else {
+            console.log('Content clean, skipping AI')
+          }
+          
           // Create Sanity document
           const docId = await createPressRelease({
-            title,
+            title: finalTitle,
             url: article.url,
-            body,
+            body: finalBody,
+            shortDescription: finalShortDesc,
           })
 
           console.log(`✓ Imported: ${title.substring(0, 50)}... (${docId})`)
