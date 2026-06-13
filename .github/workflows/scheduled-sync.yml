@@ -2,8 +2,8 @@ name: Scheduled PR Newswire Import & Webflow Sync
 
 on:
   schedule:
-    # Run every 48 hours (every 2 days at midnight UTC)
-    - cron: '0 0 */2 * *'
+    # Run daily at midnight UTC
+    - cron: '0 0 * * *'
   workflow_dispatch:
     # Allow manual trigger from GitHub Actions tab
 

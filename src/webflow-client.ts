@@ -157,7 +157,7 @@ export async function createWebflowItem(data: {
       body: JSON.stringify({
         fieldData,
         _archived: false,
-        _draft: false,
+        _draft: true, // Create as draft - review before publishing
       }),
     }
   )
